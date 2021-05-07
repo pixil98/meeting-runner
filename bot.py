@@ -1,4 +1,4 @@
-""""
+"""
 Copyright © Krypton 2021 - https://github.com/kkrypt0nn
 Description:
 This is a template to create your own discord bot in python.
@@ -49,10 +49,10 @@ intents = discord.Intents.all()
 
 bot = Bot(command_prefix=config.BOT_PREFIX, intents=intents)
 
-# The code in this even is executed when the bot is ready
+# The code in this event is executed when the bot is ready
 @bot.event
 async def on_ready():
-	bot.loop.create_task(status_task())
+	#bot.loop.create_task(status_task())
 	print(f"Logged in as {bot.user.name}")
 	print(f"Discord.py API version: {discord.__version__}")
 	print(f"Python version: {platform.python_version()}")
@@ -60,16 +60,16 @@ async def on_ready():
 	print("-------------------")
 
 # Setup the game status task of the bot
-async def status_task():
-	while True:
-		await bot.change_presence(activity=discord.Game("with you!"))
-		await asyncio.sleep(60)
-		await bot.change_presence(activity=discord.Game("with Krypton!"))
-		await asyncio.sleep(60)
-		await bot.change_presence(activity=discord.Game(f"{config.BOT_PREFIX} help"))
-		await asyncio.sleep(60)
-		await bot.change_presence(activity=discord.Game("with humans!"))
-		await asyncio.sleep(60)
+#async def status_task():
+#	while True:
+#		await bot.change_presence(activity=discord.Game("with you!"))
+#		await asyncio.sleep(60)
+#		await bot.change_presence(activity=discord.Game("with Krypton!"))
+#		await asyncio.sleep(60)
+#		await bot.change_presence(activity=discord.Game(f"{config.BOT_PREFIX} help"))
+#		await asyncio.sleep(60)
+#		await bot.change_presence(activity=discord.Game("with humans!"))
+#		await asyncio.sleep(60)
 
 # Removes the default help command of discord.py to be able to create our custom help command.
 bot.remove_command("help")
