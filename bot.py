@@ -117,4 +117,4 @@ async def on_command_error(context, error):
 	raise error
 
 # Run the bot with the token
-bot.run(config.TOKEN)
+bot.run(os.environ['DISCORDTOKEN'])

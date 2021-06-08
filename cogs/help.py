@@ -1,5 +1,6 @@
 import os, sys, discord
 from discord.ext import commands
+from discord.ext.commands.context import Context
 
 if not os.path.isfile("config.py"):
     sys.exit("'config.py' not found! Please add it and try again.")
@@ -11,7 +12,7 @@ class Help(commands.Cog, name="help"):
         self.bot = bot
 
     @commands.command(name="help")
-    async def help(self, context):
+    async def help(self, context: Context):
         """
         List all commands from every Cog the bot has loaded.
         """
