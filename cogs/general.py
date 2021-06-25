@@ -1,5 +1,6 @@
 import os, sys, discord
 from discord.ext import commands
+from discord.ext.commands import Bot
 from discord.ext.commands.context import Context
 
 # Only if you want to use variables that are in the config.py file.
@@ -10,9 +11,8 @@ else:
 
 # Here we name the cog and create a new class for the cog.
 class General(commands.Cog, name="general"):
-
-    def __init__(self, bot):
-        self.bot = bot
+    def __init__(self, bot: Bot):
+        self.bot: Bot = bot
 
     @commands.command(name="approve")
     @commands.has_role("Approved")

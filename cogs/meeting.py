@@ -1,5 +1,6 @@
 import os, sys, discord
 from discord.ext import commands
+from discord.ext.commands import Bot
 from discord.ext.commands.context import Context
 
 # Only if you want to use variables that are in the config.py file.
@@ -10,117 +11,120 @@ else:
 
 # Here we name the cog and create a new class for the cog.
 class Meeting(commands.Cog, name="meeting"):
+    def __init__(self, bot: Bot):
+        self.bot: Bot = bot
+        self.meetingChannelName = "current-meeting"
+        self._meetingChannel: dict[int, discord.TextChannel] = {}
+        self._stack: dict[int, list[discord.TextChannel]] = {}
+        self._stackMessage: dict[int, discord.Message] = {}
 
-    def __init__(self, bot):
-        self.bot = bot
-        self.initEmptyVars()
+    def meetingChannel(self, guild:discord.Guild) -> discord.TextChannel:
+        """
+        Gets a reference to the guild's meeting channel
+        """
+        if guild.id not in self._meetingChannel:
+            self._meetingChannel[guild.id] = discord.utils.get(guild.channels, name="current-meeting")
+        return self._meetingChannel[guild.id]
     
-    def initEmptyVars(self):
-        # Meeting vars
-        self.meetingRunning = False
-        self.meetingChannel: discord.TextChannel = None
-
-        # Stack vars
-        self.stackList = []
-        self.stackMsg = None
-
-        # Agenda vars
-        self.angendaList = []
-        self.nextAgendaList = []
-
-    @commands.command(name="start-meeting")
-    async def startMeeting(self, context: Context):
+    def stackList(self, guild: discord.Guild) -> "list[str]":
         """
-        Starts a new meeting.
+        Gets a reference to the guild's stack
         """
-        if self.meetingRunning == True:
-            return
+        if guild.id not in self._stack:
+            self._stack[guild.id] = []
+        return self._stack[guild.id]
 
-        self.meetingRunning = True
-        self.meetingChannel = discord.utils.get(context.guild.channels, name="current-meeting")
-        #await self.meetingChannel.send("@everyone Meeting now starting.")
-
-        #Post Agenda here
-        #agenda = discord.Embed(
-        #        title="Agenda",
-        #        description="This is where the agenda would be",
-        #        color=config.success
-        #)
-        #await self.meetingChannel.send(embed=agenda)
-
-        #Post Empty Stack
-        await self.printStack()
-
-    
-    @commands.command(name="end-meeting")
-    async def endMeeting(self, context: Context):
+    def stackMessage(self, guild: discord.Guild) -> discord.Message:
         """
-        Ends the current meeting.
+        Gets a reference to the guild's stack
         """
-        if self.meetingRunning == False:
-            return
+        if guild.id not in self._stackMessage:
+            self._stackMessage[guild.id] = None
+        return self._stackMessage[guild.id]
 
-        #await self.meetingChannel.delete()
-        self.initEmptyVars()
-
-    @commands.command(name="stack")
-    async def stack(self, context: Context):
+    def setStackMessage(self, message: discord.Message):
         """
-        Add yourself to the current stack.
+        Sets a reference for the guild's stack message
         """
-        await context.message.delete()
-        if self.meetingRunning == False:
-            return
+        guild: discord.Guild = message.guild
+        self._stackMessage[guild.id] = message
 
-        self.stackList.append(context.message.author)
-        await self.printStack()
-
-    @commands.command(name="unstack")
-    async def unstack(self, context: Context):
+    def clearStackVars(self, guild: discord.Guild):
         """
-        Remove yourself from the stack.
+        Clears out stack variables for the guild
         """
-        await context.message.delete()
-        if self.meetingRunning == False:
-            return
+        self.stackList(guild).clear()
+        self._stackMessage[guild.id] = None
 
-        try:
-            self.stackList.remove(context.message.author)
-        except ValueError:
-            pass
-        await self.printStack()
-
-    @commands.command(name="pop")
-    async def pop(self, context: Context, n: int = 0):
+    async def clearChannel(self, channel: discord.TextChannel):
         """
-        Remove the numbered entry from the stack, defaults to the top entry.
+        Clears all messages out of a channel.
         """
-        await context.message.delete()
-        if len(self.stackList) > n:
-            self.stackList.pop(n)
-            await self.printStack()
+        if channel is not None:
+            async for msg in channel.history(limit=None):
+                await msg.delete()
 
-    async def printStack(self):
-        msg = '\n'.join(f'{i} - {n.display_name}' for i, n in enumerate(self.stackList))
+    async def printStack(self, guild: discord.Guild):
+        """
+        Prints out the current stack
+        """
+        msg = '\n'.join(f'{i} - {n.display_name}' for i, n in enumerate(self.stackList(guild)))
         embed = discord.Embed(
                 title="Current Stack",
                 description=msg,
                 color=config.success
             )
-
-        if self.stackMsg is None:
-            self.stackMsg = await self.meetingChannel.send(embed=embed)
+        print(f"Message {self.stackMessage(guild)}")
+        if self.stackMessage(guild) is None:
+            self.setStackMessage(await self.meetingChannel(guild).send(embed=embed))
         else:
-            await self.stackMsg.edit(embed=embed)
-    
-    @commands.command(name="agenda-add")
-    async def agendaAdd(self, context: Context):
-        pass
+            await self.stackMessage(guild).edit(embed=embed)
 
-    @commands.command(name="debug")
-    async def debug(self, context: Context):
-        await context.send(vars(self))
-    
+    @commands.command(name="start-meeting")
+    @commands.has_role("Approved")
+    async def startMeeting(self, context: Context):
+        """
+        Starts a new meeting.
+        """
+        self.clearStackVars(context.guild)
+        await self.clearChannel(self.meetingChannel(context.guild))
+        await self.meetingChannel(context.guild).send("@everyone Meeting now starting.")
+        await self.printStack(context.guild)  #Post Empty Stack
+
+    @commands.command(name="stack")
+    @commands.check_any(commands.has_role("Approved"), commands.has_role("Guest"))
+    async def stack(self, context: Context):
+        """
+        Add yourself to the current stack.
+        """
+        await context.message.delete()
+        self.stackList(context.guild).append(context.message.author)
+        await self.printStack(context.guild)
+
+    @commands.command(name="unstack")
+    @commands.check_any(commands.has_role("Approved"), commands.has_role("Guest"))
+    async def unstack(self, context: Context):
+        """
+        Remove yourself from the stack.
+        """
+        await context.message.delete()
+        try:
+            self.stackList(context.guild).remove(context.message.author)
+        except ValueError:
+            pass
+        await self.printStack(context.guild)
+
+    @commands.command(name="pop")
+    @commands.has_role("Approved")
+    async def pop(self, context: Context, n: int = 0):
+        """
+        Remove the numbered entry from the stack, defaults to the top entry.
+        """
+        await context.message.delete()
+        if len(self.stackList(context.guild)) > n:
+            self.stackList(context.guild).pop(n)
+            await self.printStack(context.guild)
+
 
 # And then we finally add the cog to the bot so that it can load, unload, reload and use it's content.
 def setup(bot):

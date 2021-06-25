@@ -1,5 +1,6 @@
 import os, sys, discord
 from discord.ext import commands
+from discord.ext.commands import Bot
 from discord.ext.commands.context import Context
 
 if not os.path.isfile("config.py"):
@@ -8,8 +9,8 @@ else:
     import config
 
 class Help(commands.Cog, name="help"):
-    def __init__(self, bot):
-        self.bot = bot
+    def __init__(self, bot: Bot):
+        self.bot: Bot = bot
 
     @commands.command(name="help")
     async def help(self, context: Context):
