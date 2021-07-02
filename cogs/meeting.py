@@ -12,8 +12,15 @@ else:
 
 FOLLOWUP_LOOKBACK_DAYS = 7
 FOLLOWUP_TITLE = "**Follow-ups**"
+FOLLOWUP_COMMAND = "follow-up"
 CHECK_MARK_EMOJI = u"\u2705"
 BULLET_POINT = u"\u2022"
+
+def isValidFollowup(followUp: discord.Message) -> bool: # TODO figure out how to exclude deleted messages
+    return (followUp.content[:len(FOLLOWUP_COMMAND)+1] == "!"+FOLLOWUP_COMMAND)
+
+def formatFollowup(followUp: discord.Message) -> str:
+    return BULLET_POINT + followUp.content.replace(BULLET_POINT, "").replace("!"+FOLLOWUP_COMMAND, "")
 
 # Here we name the cog and create a new class for the cog.
 class Meeting(commands.Cog, name="meeting"):
@@ -123,18 +130,12 @@ class Meeting(commands.Cog, name="meeting"):
         """
         Sends a summary of the followups as a message
         """
-        if len(self.followUps(guild)) == 0:
-            return
+        if len(self.followUps(guild)) == 0: return
 
         text = FOLLOWUP_TITLE + '\n' + \
-            '\n'.join(BULLET_POINT + followUp.content.replace(BULLET_POINT, "").replace("!follow-up", "")
-                      for followUp in self.followUps(guild))
-        caption = "React with the check mark when you've completed all of your follow-ups."
-        embed = discord.Embed(
-                title=FOLLOWUP_TITLE,
-                description=text,
-                color=config.success
-            )
+            '\n'.join(formatFollowup(followUp)
+                      for followUp in self.followUps(guild)
+                      if isValidFollowup(followUp))
         self.clearFollowUps(guild)
         message = await self.followUpChannel(guild).send(content=text)
         await message.add_reaction(CHECK_MARK_EMOJI)
@@ -227,7 +228,7 @@ class Meeting(commands.Cog, name="meeting"):
             self.stackList(context.guild).pop(n)
             await self.printStack(context.guild)
 
-    @commands.command(name="follow-up")
+    @commands.command(name=FOLLOWUP_COMMAND)
     @commands.has_role("Approved")
     async def followUp(self, context: Context):
         """
