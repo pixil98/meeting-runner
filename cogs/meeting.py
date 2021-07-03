@@ -154,42 +154,48 @@ class Meeting(commands.Cog, name="meeting"):
                               after: datetime.datetime,
                               before: datetime.datetime,
                               followUpChannel: discord.TextChannel
-                              ) -> list[discord.Member]:
+                              ) -> dict[discord.Member, str]:
         """
         Looks up the members that need reminding from recent meetings.
         """
-        members = []
+        members = {}
         async for message in followUpChannel.history(limit=None, after=after, before=before ):
             if message.author != self.bot.user: continue
             if message.content[:len(FOLLOWUP_TITLE)] != FOLLOWUP_TITLE: continue
+            linesWithId = message.content.split("\n" + BULLET_POINT)
+            linesWithNickname = message.clean_content.split("\n" + BULLET_POINT) # this is bad if somebody has a bullet point in their username. ¯\_(ツ)_/¯
             doneUsers = []
             for reaction in message.reactions:
                 if reaction.emoji == CHECK_MARK_EMOJI:
                     doneUsers = await reaction.users().flatten()
             for member in message.mentions:
-                if (member not in doneUsers) and (member not in members):
-                    members.append(member)
+                if (member not in doneUsers):
+                    if member not in members.keys(): members[member] = ""
+                    members[member] += "".join("\n" + BULLET_POINT+linesWithNickname[i]
+                                               for i in range(len(linesWithId))
+                                               if str(member.id) in linesWithId[i])
         return members
 
-    async def sendFollowUpReminders(self, members: list[discord.Member]):
+    async def sendFollowUpReminders(self, members: dict[discord.Member,str]):
         """
         Sends a DM to the users in the list
         """
         for member in members:
             await member.send(
-                content="Don't forget to complete your follow-ups in the #agenda-and-followups channel!. " +
-                        "If you're done, react with the check mark to suppress future reminders.")
+                content="Don't forget to complete your follow-ups. " +
+                        "If you're done, react with the check mark in #agenda-and-followups to suppress future reminders." +
+                        members[member])
 
     async def remindFollowUps(self, guild: discord.Guild, now: datetime.datetime):
         """
         Sends DM reminders to everyone who hasn't completed their follow-ups from
         any meeting in the last week.
         """
-        membersToRemind = []
+        membersToRemind = {}
         for timedelta in FOLLOWUP_REMINDER_TIMES:
             after = now - timedelta - datetime.timedelta(hours=FOLLOWUP_REMINDER_REFRESH_HRS)/2
             before = now - timedelta + datetime.timedelta(hours=FOLLOWUP_REMINDER_REFRESH_HRS)/2
-            membersToRemind.extend(await self.membersToRemind(after, before, self.followUpChannel(guild)))
+            membersToRemind.update(await self.membersToRemind(after, before, self.followUpChannel(guild)))
         await self.sendFollowUpReminders(membersToRemind)
 
     @tasks.loop(hours=FOLLOWUP_REMINDER_REFRESH_HRS)
@@ -258,6 +264,15 @@ class Meeting(commands.Cog, name="meeting"):
         Assign somebody a follow-up by tagging them
         """
         await self.addFollowUp(context.guild, context.message)
+
+    @commands.command(name="test-reminders")
+    @commands.has_role("Approved")
+    async def testReminders(self, context: Context):
+        """
+        Test the follow-up reminders feature
+        """
+        await self.remindFollowUps(context.guild, datetime.datetime.utcnow())
+
 
 # And then we finally add the cog to the bot so that it can load, unload, reload and use it's content.
 def setup(bot):
