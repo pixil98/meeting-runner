@@ -1,8 +1,9 @@
+import datetime
 import os, sys, discord
-from discord.ext import commands
+from discord.ext import tasks, commands
 from discord.ext.commands import Bot
 from discord.ext.commands.context import Context
-import datetime
+
 
 # Only if you want to use variables that are in the config.py file.
 if not os.path.isfile("config.py"):
@@ -10,7 +11,12 @@ if not os.path.isfile("config.py"):
 else:
     import config
 
-FOLLOWUP_LOOKBACK_DAYS = 7
+FOLLOWUP_REMINDER_TIMES = (
+    datetime.timedelta(days=2, hours=12),
+    datetime.timedelta(days=4, hours=11),
+    datetime.timedelta(days=6, hours=16)
+)
+FOLLOWUP_REMINDER_REFRESH_HRS = 1
 FOLLOWUP_TITLE = "**Follow-ups**"
 FOLLOWUP_COMMAND = "follow-up"
 CHECK_MARK_EMOJI = u"\u2705"
@@ -32,6 +38,10 @@ class Meeting(commands.Cog, name="meeting"):
         self._stackMessage: dict[int, discord.Message] = {}
         self._followUpChannel: dict[int, discord.TextChannel] = {}
         self._followUps: dict[int, list[discord.Message]] = {}
+        self.reminderTask.start()
+
+    def cog_unload(self):
+        self.reminderTask.cancel()
 
     def meetingChannel(self, guild:discord.Guild) -> discord.TextChannel:
         """
@@ -122,7 +132,7 @@ class Meeting(commands.Cog, name="meeting"):
 
     def clearFollowUps(self, guild: discord.Guild):
         """
-        Clears the current list of followups
+         Clears the current list of followups
         """
         self.followUps(guild).clear()
 
@@ -140,13 +150,16 @@ class Meeting(commands.Cog, name="meeting"):
         message = await self.followUpChannel(guild).send(content=text)
         await message.add_reaction(CHECK_MARK_EMOJI)
 
-    async def membersToRemind(self, followUpChannel: discord.TextChannel) -> list[discord.Member]:
+    async def membersToRemind(self,
+                              after: datetime.datetime,
+                              before: datetime.datetime,
+                              followUpChannel: discord.TextChannel
+                              ) -> list[discord.Member]:
         """
         Looks up the members that need reminding from recent meetings.
         """
         members = []
-        startDateTime = datetime.datetime.utcnow() - datetime.timedelta(days=FOLLOWUP_LOOKBACK_DAYS)
-        async for message in followUpChannel.history(limit=None, after=startDateTime):
+        async for message in followUpChannel.history(limit=None, after=after, before=before ):
             if message.author != self.bot.user: continue
             if message.content[:len(FOLLOWUP_TITLE)] != FOLLOWUP_TITLE: continue
             doneUsers = []
@@ -167,13 +180,23 @@ class Meeting(commands.Cog, name="meeting"):
                 content="Don't forget to complete your follow-ups in the #agenda-and-followups channel!. " +
                         "If you're done, react with the check mark to suppress future reminders.")
 
-    async def remindFollowUps(self, guild: discord.Guild):
+    async def remindFollowUps(self, guild: discord.Guild, now: datetime.datetime):
         """
         Sends DM reminders to everyone who hasn't completed their follow-ups from
         any meeting in the last week.
         """
-        membersToRemind = await self.membersToRemind(self.followUpChannel(guild))
+        membersToRemind = []
+        for timedelta in FOLLOWUP_REMINDER_TIMES:
+            after = now - timedelta - datetime.timedelta(hours=FOLLOWUP_REMINDER_REFRESH_HRS)/2
+            before = now - timedelta + datetime.timedelta(hours=FOLLOWUP_REMINDER_REFRESH_HRS)/2
+            membersToRemind.extend(await self.membersToRemind(after, before, self.followUpChannel(guild)))
         await self.sendFollowUpReminders(membersToRemind)
+
+    @tasks.loop(hours=FOLLOWUP_REMINDER_REFRESH_HRS)
+    async def reminderTask(self):
+        now = datetime.datetime.utcnow()
+        for guild in self.bot.guilds:
+            await self.remindFollowUps(guild, now)
 
     @commands.command(name="start-meeting")
     @commands.has_role("Approved")
@@ -242,7 +265,7 @@ class Meeting(commands.Cog, name="meeting"):
         """
         Test the follow-up reminders feature
         """
-        await self.remindFollowUps(context.guild)
+        await self.remindFollowUps(context.guild, datetime.datetime.utcnow())
 
 
 # And then we finally add the cog to the bot so that it can load, unload, reload and use it's content.
