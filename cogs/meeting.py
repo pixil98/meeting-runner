@@ -259,15 +259,6 @@ class Meeting(commands.Cog, name="meeting"):
         """
         await self.addFollowUp(context.guild, context.message)
 
-    @commands.command(name="test-reminders")
-    @commands.has_role("Approved")
-    async def testReminders(self, context: Context):
-        """
-        Test the follow-up reminders feature
-        """
-        await self.remindFollowUps(context.guild, datetime.datetime.utcnow())
-
-
 # And then we finally add the cog to the bot so that it can load, unload, reload and use it's content.
 def setup(bot):
     bot.add_cog(Meeting(bot))
