@@ -154,7 +154,7 @@ class Meeting(commands.Cog, name="meeting"):
                               after: datetime.datetime,
                               before: datetime.datetime,
                               followUpChannel: discord.TextChannel
-                              ) -> dict[discord.Member, str]:
+                              ) -> "dict[discord.Member, str]":
         """
         Looks up the members that need reminding from recent meetings.
         """
@@ -176,7 +176,7 @@ class Meeting(commands.Cog, name="meeting"):
                                                if str(member.id) in linesWithId[i])
         return members
 
-    async def sendFollowUpReminders(self, members: dict[discord.Member,str]):
+    async def sendFollowUpReminders(self, members: "dict[discord.Member,str]"):
         """
         Sends a DM to the users in the list
         """
